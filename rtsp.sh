@@ -37,9 +37,14 @@ while [ "$1" != "" ]; do
   shift
 done
 
-if [ "$CMD" == "" ]; then
+if [ "$ADDR" == "" ]; then
   echo "usage: rtsp.sh [-p PORT] [-d DIR] [-v] ADDRESS COMMAND [ARGS]"
   exit 1
+fi
+
+if [ "$CMD" == "" ]; then
+  ssh -p $PORT $ADDR tsp 2>/dev/null
+  exit 0
 fi
 
 if [ "$VERBOSE" != "" ]; then
