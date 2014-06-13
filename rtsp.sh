@@ -2,74 +2,51 @@
 
 DATE=`date '+%Y%m%d-%H%M%S'`
 
-ADDR=
 PORT=22
 DIRNAME=$DATE
-CMD=
-ARGS=
-VERBOSE=
+TRANSPORT_DIR=0
+VERBOSE=0
 
-# parse arguments
-while [ "$1" != "" ]; do
-  if [ "$CMD" == "" ]; then
-    if [ "$1" == "-p" ]; then
-      PORT=$2
-      shift
-    elif [ "$1" == "-d" ]; then
-      DIRNAME=$2
-      shift
-    elif [ "$1" == "-v" ]; then
-      VERBOSE=true
-    else
-      if [ "$ADDR" == "" ]; then
-        ADDR=$1
-      elif [ "$CMD" == "" ]; then
-        CMD=$1
-      fi
-    fi
-  else
-    if [ "$ARGS" == "" ]; then
-      ARGS="\"$1\""
-    else
-      ARGS="$ARGS \"$1\""
-    fi
-  fi
-  shift
+while getopts d:p:tv OPT
+do
+    case $OPT in
+        d)  DIRNAME=$OPTARG
+            TRANSPORT_DIR=1
+            ;;
+        p)  PORT=$OPTARG
+            ;;
+        t)  TRANSPORT_DIR=1
+            ;;
+        v)  VERBOSE=1
+            ;;
+    esac
 done
+
+shift $((OPTIND-1))
+ADDR=$1
+shift
+
 
 if [ "$ADDR" == "" ]; then
   echo "usage: rtsp.sh [-p PORT] [-d DIR] [-v] ADDRESS COMMAND [ARGS]"
   exit 1
 fi
 
-if [ "$CMD" == "" ]; then
-  ssh -p $PORT $ADDR tsp 2>/dev/null
-  exit 0
-fi
-
-if [ "$VERBOSE" != "" ]; then
+if [ "$VERBOSE" == "1" ]; then
   echo "ADDR=$ADDR"
   echo "PORT=$PORT"
   echo "DIRNAME=$DIRNAME"
-  echo "CMD=$CMD"
-  echo "ARGS=$ARGS"
-  echo "$CMD $ARGS"
-  QUIET_OPT=
-else
-  QUIET_OPT=-q
+  echo "tsp $*"
 fi
 
-TMP_ZIP=/tmp/rtsp-${DATE}.zip
-DIR=rtsp/$DIRNAME
-
-# copy and execute
-zip -q $TMP_ZIP -r .
-scp -P $PORT $TMP_ZIP $ADDR:$TMP_ZIP 1>/dev/null 2>&1
-ssh -p $PORT $ADDR 1>/dev/null 2>&1 <<EOF
-mkdir -p $DIR;
-cd $DIR;
-unzip -q -o $TMP_ZIP;
-rm -f $TMP_ZIP;
-tsp $CMD $ARGS;
-EOF
-rm -f $TMP_ZIP
+if [ "$TRANSPORT_DIR" == "1" ]; then
+  DIR=rtsp/$DIRNAME
+  if ssh -p $PORT $ADDR "test -e $DIR"; then
+    echo "ERROR: $DIR already exists."
+    exit 1
+  fi
+  rsync -auz -e "ssh -p $PORT" . $ADDR:$DIR
+  ssh -p $PORT $ADDR "cd $DIR; tsp $*"
+else
+  ssh -p $PORT $ADDR "tsp $*"
+fi
